@@ -8,20 +8,17 @@ import { useRouter } from 'next/navigation'
 
 import { Settings } from '../../../../payload/payload-types'
 import { Button } from '../../../_components/Button'
-import { HR } from '../../../_components/HR'
 import { LoadingShimmer } from '../../../_components/LoadingShimmer'
-import { Media } from '../../../_components/Media'
-import { Price } from '../../../_components/Price'
 import { useAuth } from '../../../_providers/Auth'
 import { useCart } from '../../../_providers/Cart'
 import { useTheme } from '../../../_providers/Theme'
 import cssVariables from '../../../cssVariables'
 import { CheckoutForm } from '../CheckoutForm'
+import { CheckoutItem } from '../CheckoutItem'
 
 import classes from './index.module.scss'
+import axios from 'axios'
 
-const apiKey = `${process.env.NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY}`
-const stripe = loadStripe(apiKey)
 
 export const CheckoutPage: React.FC<{
   settings: Settings
@@ -33,8 +30,7 @@ export const CheckoutPage: React.FC<{
   const { user } = useAuth()
   const router = useRouter()
   const [error, setError] = React.useState<string | null>(null)
-  const [clientSecret, setClientSecret] = React.useState()
-  const hasMadePaymentIntent = React.useRef(false)
+  const [saleId, setSaleId] = React.useState<string | null>(null);
   const { theme } = useTheme()
 
   const { cart, cartIsEmpty, cartTotal } = useCart()
@@ -46,151 +42,111 @@ export const CheckoutPage: React.FC<{
   }, [router, user, cartIsEmpty])
 
   useEffect(() => {
-    if (user && cart && hasMadePaymentIntent.current === false) {
-      hasMadePaymentIntent.current = true
-
-      const makeIntent = async () => {
+    if (user && cart && !saleId) {
+      const generateSale = async () => {
         try {
-          const paymentReq = await fetch(
-            `${process.env.NEXT_PUBLIC_SERVER_URL}/api/create-payment-intent`,
+          const response = await axios.post(
+            'https://sandbox.payme.io/api/generate-sale',
             {
-              method: 'POST',
-              credentials: 'include',
-            },
-          )
+              seller_payme_id: 'MPLDEMO-MPLDEMO-MPLDEMO-1234567', // Replace with your PayMe seller ID
+              sale_price: 100,
+              currency: 'ILS',
+              product_name: 'Your Product Description',
+              sale_return_url: `${window.location.origin}/order-confirmation`,
+              sale_send_notification: true,
+              sale_callback_url: `${process.env.NEXT_PUBLIC_SERVER_URL}/api/payme-callback`, // Replace with your callback URL
+            }
+          );
 
-          const res = await paymentReq.json()
-
-          if (res.error) {
-            setError(res.error)
-          } else if (res.client_secret) {
-            setError(null)
-            setClientSecret(res.client_secret)
-          }
-        } catch (e) {
-          setError('Something went wrong.')
+          setSaleId(response.data.sale_id);
+        } catch (err) {
+          setError('Something went wrong.');
         }
-      }
+      };
 
-      makeIntent()
+      generateSale();
     }
-  }, [cart, user])
+  }, [user, cart, cartTotal, saleId]);
 
-  if (!user || !stripe) return null
+  if (!user) return null
 
   return (
     <Fragment>
-      {cartIsEmpty && (
-        <div>
-          {'Your '}
-          <Link href="/cart">cart</Link>
-          {' is empty.'}
-          {typeof productsPage === 'object' && productsPage?.slug && (
-            <Fragment>
-              {' '}
-              <Link href={`/${productsPage.slug}`}>Continue shopping?</Link>
-            </Fragment>
-          )}
+    {cartIsEmpty && (
+      <div>
+        {'Your '}
+        <Link href="/cart">cart</Link>
+        {' is empty.'}
+        {typeof productsPage === 'object' && productsPage?.slug && (
+          <Fragment>
+            {' '}
+            <Link href={`/${productsPage.slug}`}>Continue shopping?</Link>
+          </Fragment>
+        )}
+      </div>
+    )}
+    {!cartIsEmpty && (
+      <div className={classes.items}>
+        <div className={classes.header}>
+          <p>Products</p>
+          <div className={classes.headerItemDetails}>
+            <p></p>
+            <p className={classes.quantity}>Quantity</p>
+          </div>
+          <p className={classes.subtotal}>Subtotal</p>
         </div>
-      )}
-      {!cartIsEmpty && (
-        <div className={classes.items}>
+
+        <ul>
           {cart?.items?.map((item, index) => {
             if (typeof item.product === 'object') {
               const {
                 quantity,
                 product,
-                product: { id, stripeProductID, title, meta },
-              } = item
+                product: { title, meta },
+              } = item;
 
-              if (!quantity) return null
+              if (!quantity) return null;
 
-              const isLast = index === (cart?.items?.length || 0) - 1
-
-              const metaImage = meta?.image
+              const metaImage = meta?.image;
 
               return (
                 <Fragment key={index}>
-                  <div className={classes.row}>
-                    <div className={classes.mediaWrapper}>
-                      {!metaImage && <span className={classes.placeholder}>No image</span>}
-                      {metaImage && typeof metaImage !== 'string' && (
-                        <Media
-                          className={classes.media}
-                          imgClassName={classes.image}
-                          resource={metaImage}
-                          fill
-                        />
-                      )}
-                    </div>
-                    <div className={classes.rowContent}>
-                      {!stripeProductID && (
-                        <p className={classes.warning}>
-                          {'This product is not yet connected to Stripe. To link this product, '}
-                          <Link
-                            href={`${process.env.NEXT_PUBLIC_SERVER_URL}/admin/collections/products/${id}`}
-                          >
-                            edit this product in the admin panel
-                          </Link>
-                          {'.'}
-                        </p>
-                      )}
-                      <h6 className={classes.title}>{title}</h6>
-                      <Price product={product} button={false} quantity={quantity} />
-                    </div>
-                  </div>
-                  {!isLast && <HR />}
+                  <CheckoutItem
+                    product={product}
+                    title={title}
+                    metaImage={metaImage}
+                    quantity={quantity}
+                    index={index}
+                  />
                 </Fragment>
-              )
+              );
             }
-            return null
+            return null;
           })}
-          <div className={classes.orderTotal}>{`Order total: ${cartTotal.formatted}`}</div>
-        </div>
-      )}
-      {!clientSecret && !error && (
-        <div className={classes.loading}>
-          <LoadingShimmer number={2} />
-        </div>
-      )}
-      {!clientSecret && error && (
-        <div className={classes.error}>
-          <p>{`Error: ${error}`}</p>
-          <Button label="Back to cart" href="/cart" appearance="secondary" />
-        </div>
-      )}
-      {clientSecret && (
-        <Fragment>
-          {error && <p>{`Error: ${error}`}</p>}
-          <Elements
-            stripe={stripe}
-            options={{
-              clientSecret,
-              appearance: {
-                theme: 'stripe',
-                variables: {
-                  colorText:
-                    theme === 'dark' ? cssVariables.colors.base0 : cssVariables.colors.base1000,
-                  fontSizeBase: '16px',
-                  fontWeightNormal: '500',
-                  fontWeightBold: '600',
-                  colorBackground:
-                    theme === 'dark' ? cssVariables.colors.base850 : cssVariables.colors.base0,
-                  fontFamily: 'Inter, sans-serif',
-                  colorTextPlaceholder: cssVariables.colors.base500,
-                  colorIcon:
-                    theme === 'dark' ? cssVariables.colors.base0 : cssVariables.colors.base1000,
-                  borderRadius: '0px',
-                  colorDanger: cssVariables.colors.error500,
-                  colorDangerText: cssVariables.colors.error500,
-                },
-              },
-            }}
-          >
-            <CheckoutForm />
-          </Elements>
-        </Fragment>
-      )}
-    </Fragment>
+          <div className={classes.orderTotal}>
+            <p>Order Total</p>
+            <p>{cartTotal.formatted}</p>
+          </div>
+        </ul>
+      </div>
+    )}
+    {!saleId && !error && (
+      <div className={classes.loading}>
+        <LoadingShimmer number={2} />
+      </div>
+    )}
+    {!saleId && error && (
+      <div className={classes.error}>
+        <p>{`Error: ${error}`}</p>
+        <Button label="Back to cart" href="/cart" appearance="secondary" />
+      </div>
+    )}
+    {saleId && (
+      <Fragment>
+        <h3 className={classes.payment}>Payment Details</h3>
+        <CheckoutForm saleId={saleId} />
+      </Fragment>
+    )}
+  </Fragment>
   )
 }
