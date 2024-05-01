@@ -1,6 +1,6 @@
 'use client'
 
-import React, { Fragment } from 'react'
+import React, { Fragment, useEffect, useState } from 'react'
 import Link from 'next/link'
 
 import { Page, Settings } from '../../../../payload/payload-types'
@@ -26,6 +26,27 @@ export const CartPage: React.FC<{
   const { user } = useAuth()
 
   const { cart, cartIsEmpty, addItemToCart, cartTotal, hasInitializedCart } = useCart()
+  const [total, setTotal] = useState<string>('')
+
+  useEffect(() => {
+    if (cart.items[0]) {
+      let total = 0
+      cart.items.map(item => {
+        total += item.quantity * item.product['price']
+      })
+
+      const formattedPrice = formatPrice(total + 50)
+
+      setTotal(formattedPrice)
+    }
+  }, [cart])
+
+  const formatPrice = (price: number) => {
+    return price.toLocaleString('he-IL', {
+      style: 'currency',
+      currency: 'ILS'
+    });
+  }
 
   return (
     <Fragment>
@@ -103,12 +124,12 @@ export const CartPage: React.FC<{
 
                 <div className={classes.row}>
                   <p className={classes.cartTotal}>Delivery Charge</p>
-                  <p className={classes.cartTotal}>$15</p>
+                  <p className={classes.cartTotal}>{formatPrice(50)}</p>
                 </div>
 
                 <div className={classes.row}>
                   <p className={classes.cartTotal}>Grand Total</p>
-                  <p className={classes.cartTotal}>{cartTotal.formatted}</p>
+                  <p className={classes.cartTotal}>{total}</p>
                 </div>
 
                 <Button

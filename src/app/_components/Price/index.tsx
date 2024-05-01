@@ -30,8 +30,6 @@ export const Price: React.FC<{
   button?: 'addToCart' | 'removeFromCart' | false
 }> = props => {
   const { product, product: { price } = {}, button = 'addToCart', quantity } = props
-  console.log("product", product)
-  console.log("price", price)
   const [formattedPrice, setFormattedPrice] = useState<string>('')
   const [priceWithQuantity, setPriceWithQuantity] = useState<string>('')
 
