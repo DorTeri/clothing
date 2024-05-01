@@ -24,6 +24,7 @@ const policies = {
     'https://api.stripe.com',
     'https://maps.googleapis.com',
     'https://sandbox.payme.io',
+    'https://sandbox.meshulam.co.il',
   ],
 }
 

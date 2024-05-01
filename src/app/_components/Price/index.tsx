@@ -6,64 +6,32 @@ import { Product } from '../../../payload/payload-types'
 
 import classes from './index.module.scss'
 
-export const priceFromJSON = (priceJSON: string, quantity: number = 1, raw?: boolean): string => {
-  let price = ''
-
-  if (priceJSON) {
-    try {
-      const parsed = JSON.parse(priceJSON)?.data[0]
-      const priceValue = parsed.unit_amount * quantity
-      const priceType = parsed.type
-
-      if (raw) return priceValue.toString()
-
-      price = (priceValue / 100).toLocaleString('en-US', {
-        style: 'currency',
-        currency: 'USD', // TODO: use `parsed.currency`
-      })
-
-      if (priceType === 'recurring') {
-        price += `/${
-          parsed.recurring.interval_count > 1
-            ? `${parsed.recurring.interval_count} ${parsed.recurring.interval}`
-            : parsed.recurring.interval
-        }`
-      }
-    } catch (e) {
-      console.error(`Cannot parse priceJSON`) // eslint-disable-line no-console
-    }
-  }
-
-  return price
+export const priceFromJSON = (price: string, quantity: string = '1',raw?: boolean): string => {
+  const formattedPrice =  +price * +quantity
+  return formattedPrice.toString()
 }
 
 export const Price: React.FC<{
   product: Product
-  quantity?: number
+  quantity?: string
   button?: 'addToCart' | 'removeFromCart' | false
 }> = props => {
-  const { product, product: { priceJSON } = {}, button = 'addToCart', quantity } = props
-
-  const [price, setPrice] = useState<{
-    actualPrice: string
-    withQuantity: string
-  }>(() => ({
-    actualPrice: priceFromJSON(priceJSON),
-    withQuantity: priceFromJSON(priceJSON, quantity),
-  }))
+  const { product, product: { price } = {}, button = 'addToCart', quantity } = props
+  const [formattedPrice, setFormattedPrice] = useState<string>('')
+  const [priceWithQuantity, setPriceWithQuantity] = useState<string>('')
 
   useEffect(() => {
-    setPrice({
-      actualPrice: priceFromJSON(priceJSON),
-      withQuantity: priceFromJSON(priceJSON, quantity),
-    })
-  }, [priceJSON, quantity])
+    if (price) {
+      setFormattedPrice(priceFromJSON(price))
+      setPriceWithQuantity(priceFromJSON(price, quantity))
+    }
+  }, [price, quantity])
 
   return (
     <div className={classes.actions}>
-      {typeof price?.actualPrice !== 'undefined' && price?.withQuantity !== '' && (
+      {formattedPrice && priceWithQuantity && (
         <div className={classes.price}>
-          <p>{price?.withQuantity}</p>
+          <p>{priceWithQuantity}</p>
         </div>
       )}
     </div>
